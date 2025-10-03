@@ -5,7 +5,9 @@ import cv2
 from PIL import Image
 from mtcnn import MTCNN
 
+# -------------------------------
 # Constants
+# -------------------------------
 RAF_DB_EMOTIONS = [
     "Surprise",
     "Fear",
@@ -16,23 +18,35 @@ RAF_DB_EMOTIONS = [
     "Neutral"
 ]
 
+# -------------------------------
+# Cache the model so it loads only once
+# -------------------------------
+@st.cache_resource
+def load_model(model_path):
+    model = tf.keras.models.load_model(model_path)
+    return model
+
+# -------------------------------
 # Preprocess Function (keep RGB)
+# -------------------------------
 def preprocess_image(image, target_size):
     if isinstance(image, Image.Image):
         image = np.array(image)
 
-    # Ensure RGB (3 channels)
+    # Ensure RGB
     if len(image.shape) == 2:  # grayscale → convert to RGB
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
     elif len(image.shape) == 3 and image.shape[2] == 4:  # RGBA → RGB
         image = image[:, :, :3]
 
-    image = cv2.resize(image, target_size)       # Resize
-    image = image.astype(np.float32) / 255.0     # Normalize
-    image = np.expand_dims(image, axis=0)        # Add batch dimension (1,H,W,3)
+    image = cv2.resize(image, target_size)
+    image = image.astype(np.float32) / 255.0
+    image = np.expand_dims(image, axis=0)  # batch dimension
     return image
 
+# -------------------------------
 # Face Detection
+# -------------------------------
 def detect_face(image, detector):
     if isinstance(image, Image.Image):
         image = np.array(image)
@@ -68,7 +82,9 @@ def detect_face(image, detector):
         st.error(f"Face detection error: {e}")
         return None
 
+# -------------------------------
 # Prediction
+# -------------------------------
 def predict_emotion(model, image):
     try:
         predictions = model.predict(image, verbose=0)
@@ -79,22 +95,29 @@ def predict_emotion(model, image):
         st.error(f"Prediction error: {e}")
         return None, None, None
 
+# -------------------------------
 # Streamlit App
+# -------------------------------
 st.title("🎭 Emotion Detection")
 
-# Sidebar
+# -------------------------------
+# Sidebar: Model Upload
+# -------------------------------
 st.sidebar.header("⚙️ Model Configuration")
 model_file = st.sidebar.file_uploader("Upload Keras Model", type=["keras"])
 
 if model_file:
+    # Save uploaded file temporarily
     with open("temp_model.keras", "wb") as f:
         f.write(model_file.getbuffer())
+
     try:
-        model = tf.keras.models.load_model("temp_model.keras")
+        # Load model using cache
+        model = load_model("temp_model.keras")
         st.sidebar.success("✅ Model loaded!")
         st.sidebar.info(f"Input shape: {model.input_shape}")
 
-        # Target size from model
+        # Determine target size from model
         if len(model.input_shape) == 4:
             target_h, target_w = model.input_shape[1], model.input_shape[2]
             target_size = (target_w, target_h)
@@ -104,7 +127,9 @@ if model_file:
         st.sidebar.info(f"Target size: {target_size}")
         use_face_detection = st.sidebar.checkbox("Use Face Detection", value=True)
 
+        # -------------------------------
         # Upload Image
+        # -------------------------------
         st.header("📤 Upload Image")
         uploaded_file = st.file_uploader(
             "Choose an image",
@@ -125,6 +150,9 @@ if model_file:
                 if hasattr(image, "format"):
                     st.write(f"Format: {image.format}")
 
+            # -------------------------------
+            # Predict Emotion Button
+            # -------------------------------
             if st.button("🔍 Predict Emotion", type="primary", use_container_width=True):
                 with st.spinner("Processing..."):
                     processed_image = None
@@ -172,6 +200,7 @@ if model_file:
 
     except Exception as e:
         st.sidebar.error(f"❌ Model loading failed: {e}")
+
 else:
     st.sidebar.warning("⚠️ Please upload a Keras model file")
     st.info("Upload your trained emotion detection model in the sidebar to begin")
