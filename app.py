@@ -1,5 +1,3 @@
-# app.py
-
 import streamlit as st
 import tensorflow as tf
 import numpy as np
@@ -8,7 +6,6 @@ from PIL import Image
 from mtcnn import MTCNN
 
 # Constants
-
 RAF_DB_EMOTIONS = [
     "Surprise",
     "Fear",
@@ -19,31 +16,30 @@ RAF_DB_EMOTIONS = [
     "Neutral"
 ]
 
-
-# Preprocess Function
-
+# Preprocess Function (convert to grayscale properly)
 def preprocess_image(image, target_size):
-    if len(image.shape) == 2:  # Grayscale
-        image = np.stack([image, image, image], axis=-1)
-    elif len(image.shape) == 3:
-        if image.shape[2] == 4:  # RGBA
-            image = image[:, :, :3]
-        elif image.shape[2] == 1:
-            image = np.concatenate([image, image, image], axis=-1)
+    if isinstance(image, Image.Image):
+        image = np.array(image)
 
-    image = cv2.resize(image, target_size)        # Resize
-    image = image.astype(np.float32) / 255.0      # Normalize
-    image = np.expand_dims(image, axis=0)         # Add batch dim
+    # Convert to grayscale (model expects 1 channel)
+    if len(image.shape) == 3 and image.shape[2] == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    elif len(image.shape) == 3 and image.shape[2] == 4:  # RGBA → Gray
+        image = cv2.cvtColor(image[:, :, :3], cv2.COLOR_RGB2GRAY)
+
+    image = cv2.resize(image, target_size)       # Resize
+    image = image.astype(np.float32) / 255.0     # Normalize
+    image = np.expand_dims(image, axis=-1)       # (H,W,1)
+    image = np.expand_dims(image, axis=0)        # (1,H,W,1)
     return image
 
 # Face Detection
-
 def detect_face(image, detector):
     if isinstance(image, Image.Image):
         image = np.array(image)
 
-    if len(image.shape) == 2:
-        rgb_image = np.stack([image, image, image], axis=-1)
+    if len(image.shape) == 2:  # Already grayscale
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
     elif len(image.shape) == 3:
         if image.shape[2] == 3:
             rgb_image = image.copy()
@@ -73,7 +69,6 @@ def detect_face(image, detector):
         return None
 
 # Prediction
-
 def predict_emotion(model, image):
     try:
         predictions = model.predict(image, verbose=0)
@@ -85,7 +80,6 @@ def predict_emotion(model, image):
         return None, None, None
 
 # Streamlit App
-
 st.title("🎭 Emotion Detection")
 
 # Sidebar
@@ -105,7 +99,7 @@ if model_file:
             target_h, target_w = model.input_shape[1], model.input_shape[2]
             target_size = (target_w, target_h)
         else:
-            target_size = (100, 100)
+            target_size = (48, 48)
 
         st.sidebar.info(f"Target size: {target_size}")
         use_face_detection = st.sidebar.checkbox("Use Face Detection", value=True)
@@ -134,7 +128,6 @@ if model_file:
             if st.button("🔍 Predict Emotion", type="primary", use_container_width=True):
                 with st.spinner("Processing..."):
                     processed_image = None
-                    face_detected = False
 
                     if use_face_detection:
                         detector = MTCNN()
@@ -143,7 +136,6 @@ if model_file:
                             st.success("Face detected ✅")
                             st.image(face, caption="Detected Face", use_column_width=True)
                             processed_image = preprocess_image(face, target_size)
-                            face_detected = True
                         else:
                             st.warning("⚠️ No face detected, using full image.")
 
@@ -185,4 +177,4 @@ else:
     st.info("Upload your trained emotion detection model in the sidebar to begin")
 
 st.markdown("---")
-st.markdown(" Emotion Detection using CNN + MTCNN | Built with Streamlit")
+st.markdown("Emotion Detection using CNN + MTCNN | Built with Streamlit")
