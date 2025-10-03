@@ -16,21 +16,20 @@ RAF_DB_EMOTIONS = [
     "Neutral"
 ]
 
-# Preprocess Function (convert to grayscale properly)
+# Preprocess Function (keep RGB)
 def preprocess_image(image, target_size):
     if isinstance(image, Image.Image):
         image = np.array(image)
 
-    # Convert to grayscale (model expects 1 channel)
-    if len(image.shape) == 3 and image.shape[2] == 3:
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    elif len(image.shape) == 3 and image.shape[2] == 4:  # RGBA → Gray
-        image = cv2.cvtColor(image[:, :, :3], cv2.COLOR_RGB2GRAY)
+    # Ensure RGB (3 channels)
+    if len(image.shape) == 2:  # grayscale → convert to RGB
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+    elif len(image.shape) == 3 and image.shape[2] == 4:  # RGBA → RGB
+        image = image[:, :, :3]
 
     image = cv2.resize(image, target_size)       # Resize
     image = image.astype(np.float32) / 255.0     # Normalize
-    image = np.expand_dims(image, axis=-1)       # (H,W,1)
-    image = np.expand_dims(image, axis=0)        # (1,H,W,1)
+    image = np.expand_dims(image, axis=0)        # Add batch dimension (1,H,W,3)
     return image
 
 # Face Detection
@@ -38,7 +37,8 @@ def detect_face(image, detector):
     if isinstance(image, Image.Image):
         image = np.array(image)
 
-    if len(image.shape) == 2:  # Already grayscale
+    # Ensure RGB
+    if len(image.shape) == 2:
         rgb_image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
     elif len(image.shape) == 3:
         if image.shape[2] == 3:
